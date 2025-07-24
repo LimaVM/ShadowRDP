@@ -691,78 +691,53 @@ class RDPSessionViewer:
             self.is_refreshing = False
     
     def update_sessions(self):
-        """Atualiza lista de sessões com melhor tratamento de erros"""
+        """Obtém sessões RDP ativas usando a lógica do script original"""
         self.sessions.clear()
 
         try:
-            # Executa query user com timeout
             result = subprocess.run(
-                "query user", shell=True, capture_output=True, text=True,
-                timeout=15, encoding="cp1252"
+                "query user",
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
             )
-            output = result.stdout.strip()
+            out = result.stdout.strip()
+        except Exception as e:
+            out = ""
+            self.log_error(f"Erro ao executar 'query user': {e}")
 
-            if not output or result.returncode != 0:
-                self.sessions.append({
-                    "Usuário": "❌ Nenhuma sessão ativa ou erro na consulta",
-                    "ID": "", "Estado": "", "Idle": "", "Logon": "",
-                    "CPU %": "0.0", "RAM (MB)": "0.0", "Processos": "0"
-                })
-                return
-
-            lines = output.splitlines()
-            if len(lines) < 2:
-                return
-            
-            # Processa cada linha
-            for line in lines[1:]:
-                if not line.strip():
-                    continue
-                
-                # Remove indicador '>' e limpa
-                clean_line = line.strip().lstrip(">").strip()
-                
-                # Divide por espaços múltiplos
-                parts = re.split(r'\s{2,}', clean_line)
-                
-                if len(parts) >= 3:
-                    username = parts[0]
-                    session_name = parts[1] if len(parts) > 1 else ""
-                    session_id = parts[2] if len(parts) > 2 else ""
-                    state = parts[3] if len(parts) > 3 else ""
-                    idle_time = parts[4] if len(parts) > 4 else ""
-                    logon_time = parts[5] if len(parts) > 5 else ""
-                    
-                    # Só adiciona se tiver ID válido
-                    if session_id.isdigit():
+        if not out:
+            self.sessions.append({
+                "Usuário": "Erro",
+                "ID": "",
+                "Estado": "",
+                "Idle": "",
+                "Logon": "",
+                "CPU %": "0.0",
+                "RAM (MB)": "0.0",
+                "Processos": "0",
+            })
+        else:
+            for line in out.splitlines():
+                if "Ativo" in line:
+                    clean = line.strip().lstrip(">").rstrip()
+                    parts = re.split(r"\s{2,}", clean)
+                    if len(parts) >= 3 and parts[2].isdigit():
+                        idle = parts[4] if len(parts) > 4 else ""
+                        logon = parts[5] if len(parts) > 5 else ""
                         self.sessions.append({
-                            "Usuário": username,
-                            "ID": session_id,
-                            "Estado": state,
-                            "Idle": idle_time,
-                            "Logon": logon_time,
+                            "Usuário": parts[0],
+                            "ID": parts[2],
+                            "Estado": "Ativo",
+                            "Idle": idle,
+                            "Logon": logon,
                             "CPU %": "0.0",
                             "RAM (MB)": "0.0",
-                            "Processos": "0"
+                            "Processos": "0",
                         })
-            
-            # Ordena por usuário
-            self.sessions.sort(key=lambda s: s["Usuário"].lower())
 
-        except subprocess.TimeoutExpired:
-            self.sessions.append({
-                "Usuário": "⏱️ Timeout na consulta de sessões",
-                "ID": "", "Estado": "", "Idle": "", "Logon": "",
-                "CPU %": "0.0", "RAM (MB)": "0.0", "Processos": "0"
-            })
-            self.log_error("Timeout na consulta de sessões")
-        except Exception as e:
-            self.sessions.append({
-                "Usuário": f"❌ Erro: {str(e)[:50]}...",
-                "ID": "", "Estado": "", "Idle": "", "Logon": "",
-                "CPU %": "0.0", "RAM (MB)": "0.0", "Processos": "0"
-            })
-            self.log_error(f"Erro ao atualizar sessões: {e}")
+        self.sessions.sort(key=lambda s: s["Usuário"].lower())
     
     def update_usage(self):
         """Atualiza uso de CPU, memória e contagem de processos"""
