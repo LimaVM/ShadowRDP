@@ -693,13 +693,15 @@ class RDPSessionViewer:
     def update_sessions(self):
         """Atualiza lista de sessões com melhor tratamento de erros"""
         self.sessions.clear()
-        
+
         try:
             # Executa query user com timeout
-            result = subprocess.run("query user", shell=True, capture_output=True, 
-                                  text=True, timeout=15, encoding='cp1252')
+            result = subprocess.run(
+                "query user", shell=True, capture_output=True, text=True,
+                timeout=15, encoding="cp1252"
+            )
             output = result.stdout.strip()
-            
+
             if not output or result.returncode != 0:
                 self.sessions.append({
                     "Usuário": "❌ Nenhuma sessão ativa ou erro na consulta",
@@ -707,7 +709,7 @@ class RDPSessionViewer:
                     "CPU %": "0.0", "RAM (MB)": "0.0", "Processos": "0"
                 })
                 return
-            
+
             lines = output.splitlines()
             if len(lines) < 2:
                 return
@@ -746,7 +748,7 @@ class RDPSessionViewer:
             
             # Ordena por usuário
             self.sessions.sort(key=lambda s: s["Usuário"].lower())
-            
+
         except subprocess.TimeoutExpired:
             self.sessions.append({
                 "Usuário": "⏱️ Timeout na consulta de sessões",
