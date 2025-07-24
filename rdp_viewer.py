@@ -693,24 +693,21 @@ class RDPSessionViewer:
     def update_sessions(self):
         """Atualiza lista de sessões com melhor tratamento de erros"""
         self.sessions.clear()
-        
+
         try:
             # Executa query user com timeout
-            result = subprocess.run("query user", shell=True, capture_output=True, 
-                                  text=True, timeout=15, encoding='cp1252')
+            result = subprocess.run(
+                "query user", shell=True, capture_output=True, text=True,
+                timeout=15, encoding="cp1252"
+            )
             output = result.stdout.strip()
-            
+
             if not output or result.returncode != 0:
-                self.sessions.append({
-                    "Usuário": "❌ Nenhuma sessão ativa ou erro na consulta",
-                    "ID": "", "Estado": "", "Idle": "", "Logon": "",
-                    "CPU %": "0.0", "RAM (MB)": "0.0", "Processos": "0"
-                })
-                return
-            
+                raise RuntimeError("query user failed")
+
             lines = output.splitlines()
             if len(lines) < 2:
-                return
+                raise RuntimeError("query user returned no sessions")
             
             # Processa cada linha
             for line in lines[1:]:
@@ -746,6 +743,30 @@ class RDPSessionViewer:
             
             # Ordena por usuário
             self.sessions.sort(key=lambda s: s["Usuário"].lower())
+
+        except RuntimeError:
+            # Fallback para psutil quando query user falhar
+            user_entries = psutil.users()
+            if not user_entries:
+                self.sessions.append({
+                    "Usuário": "❌ Nenhuma sessão ativa ou erro na consulta",
+                    "ID": "", "Estado": "", "Idle": "", "Logon": "",
+                    "CPU %": "0.0", "RAM (MB)": "0.0", "Processos": "0",
+                })
+            else:
+                for u in user_entries:
+                    self.sessions.append({
+                        "Usuário": u.name,
+                        "ID": str(u.pid) if u.pid else "",
+                        "Estado": "Active",
+                        "Idle": "",
+                        "Logon": datetime.fromtimestamp(u.started).strftime(
+                            "%d/%m/%Y %H:%M"),
+                        "CPU %": "0.0",
+                        "RAM (MB)": "0.0",
+                        "Processos": "0",
+                    })
+                self.sessions.sort(key=lambda s: s["Usuário"].lower())
             
         except subprocess.TimeoutExpired:
             self.sessions.append({
