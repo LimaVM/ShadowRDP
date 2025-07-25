@@ -1425,7 +1425,8 @@ class RDPSessionViewer:
                 return
             
             try:
-                cmd = f'msg {session["id"]} "{message}"'
+                safe_msg = message.replace('"', '\\"')
+                cmd = f'msg {session["id"]} "{safe_msg}"'
                 result = subprocess.run(cmd, shell=True, capture_output=True, timeout=10)
                 
                 if result.returncode == 0:
@@ -1544,6 +1545,8 @@ class RDPSessionViewer:
         try:
             # Comando para controle remoto
             cmd = f"mstsc /shadow:{session['id']} /control"
+            if not self.show_notifications.get():
+                cmd += " /noConsentPrompt"
             subprocess.Popen(cmd, shell=True)
             messagebox.showinfo("✅ Sucesso", f"Controle remoto iniciado para {session['user']}")
             
